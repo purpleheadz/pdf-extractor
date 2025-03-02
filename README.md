@@ -6,10 +6,12 @@ PDFからテキストや表を抽出し、マークダウン形式に変換す�
 
 - PDFからテキストを抽出
 - PDFから表を抽出しマークダウン形式に変換
+- PDFから画像を抽出して個別ファイルとして保存
 - PDFをレイアウト情報を保持したままマークダウン形式に変換
 - ページ指定による部分的な抽出
 - 表の検出と自動変換
 - 文書構造の保持（見出し、段落など）
+- マークダウンから画像を参照（画像はファイルとして保存）
 
 ## インストール
 
@@ -81,6 +83,23 @@ python src/extractor.py path/to/your/file.pdf --layout -o output_with_layout.md
 - テキストの位置情報に基づくレイアウト保持
 - 表の構造化と正確な配置
 
+### 画像の抽出と保存
+
+PDFから画像のみを抽出して保存:
+```
+python src/extractor.py path/to/your/file.pdf --images
+```
+
+画像の保存先ディレクトリを指定:
+```
+python src/extractor.py path/to/your/file.pdf --images --image-dir my_images
+```
+
+画像を抽出せずにマークダウン変換(デフォルトでは画像も抽出します):
+```
+python src/extractor.py path/to/your/file.pdf --no-images
+```
+
 ### テキストのみを抽出
 
 マークダウン形式なしでプレーンテキストのみを抽出:
@@ -127,7 +146,8 @@ docker-compose run pdf-extractor /data/sample.pdf --tables -o /data/tables.md
 
 - あらゆるPDFファイルからテキストを抽出
 - 表を検出してマークダウン形式に変換
-- レイアウト情報を保持してPDFをマークダウンに変換（新機能）
+- PDFから画像を抽出して個別ファイルとして保存（新機能）
+- レイアウト情報を保持してPDFをマークダウンに変換
 - グリッドベースと非グリッドベースの両方の方法による賢い表検出
 - 文書フローにシームレスに統合された表
 - 空の行/列をクリーンアップする表構造の賢い処理
@@ -135,6 +155,7 @@ docker-compose run pdf-extractor /data/sample.pdf --tables -o /data/tables.md
 - 抽出するページの指定
 - 抽出したコンテンツをファイルに保存
 - 簡単なナビゲーションのための出力内のページマーカー
+- PDFの画像を検出して自動保存し、マークダウンから参照
 
 ## 依存ライブラリ
 

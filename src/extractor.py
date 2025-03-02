@@ -144,7 +144,7 @@ def extract_tables_as_markdown(pdf_path, output_path=None, pages='all'):
         traceback.print_exc()
         return None
 
-def extract_pdf_as_markdown(pdf_path, output_path=None, pages='all'):
+def extract_pdf_as_markdown(pdf_path, output_path=None, pages='all', extract_images=True, image_dir="extracted_images"):
     """
     Extract entire PDF content as markdown with tables integrated into the content flow.
     
@@ -152,6 +152,8 @@ def extract_pdf_as_markdown(pdf_path, output_path=None, pages='all'):
         pdf_path (str): Path to the PDF file
         output_path (str, optional): Path to save the extracted content as markdown
         pages (str or list): Page numbers to extract from (default: 'all')
+        extract_images (bool): Whether to extract images from PDF (default: True)
+        image_dir (str): Directory to save extracted images
         
     Returns:
         str: Markdown formatted content with tables properly integrated
@@ -159,7 +161,14 @@ def extract_pdf_as_markdown(pdf_path, output_path=None, pages='all'):
     try:
         reader = PyPDF2.PdfReader(pdf_path)
         num_pages = len(reader.pages)
-
+        
+        # Extract images if requested
+        image_paths = []
+        if extract_images:
+            print("Extracting images from PDF...")
+            image_paths = extract_images_from_pdf(pdf_path, output_dir=image_dir)
+            print(f"Extracted {len(image_paths)} images to {image_dir}/")
+            
         # Parse pages parameter
         if pages == 'all':
             pages_to_process = range(1, num_pages + 1)
@@ -259,6 +268,12 @@ def extract_pdf_as_markdown(pdf_path, output_path=None, pages='all'):
         
         # Initialize markdown output
         markdown_output = "# PDF Content\n\n"
+        
+        # Add image references to markdown if images were extracted
+        if image_paths:
+            markdown_output += "## Extracted Images\n\n"
+            for i, image_path in enumerate(image_paths):
+                markdown_output += f"![Image {i+1}]({image_path})\n\n"
         
         # Split text by page markers
         sections = markdown_text.split("--- Page")
@@ -437,7 +452,106 @@ def convert_text_to_markdown(text):
     
     return '\n'.join(result)
 
-def extract_pdf_with_layout(pdf_path, output_path=None, pages='all'):
+def extract_images_from_pdf(pdf_path, output_dir="extracted_images"):
+    """
+    Extract all images from PDF file and save them to a directory.
+    
+    Args:
+        pdf_path (str): Path to the PDF file
+        output_dir (str): Directory to save extracted images
+        
+    Returns:
+        list: List of saved image paths
+    """
+    try:
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Open the PDF file
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            image_paths = []
+            
+            # Extract images from each page
+            for page_num, page in enumerate(reader.pages):
+                
+                # Get XObject resources (contain images)
+                if '/Resources' in page and '/XObject' in page['/Resources']:
+                    x_objects = page['/Resources']['/XObject']
+                    
+                    # Extract each image from resources
+                    for obj_name, obj in x_objects.items():
+                        if obj['/Type'] == '/XObject' and obj['/Subtype'] == '/Image':
+                            try:
+                                # Generate unique filename
+                                image_hash = hash(obj_name) & 0xffffffff
+                                image_filename = f"{output_dir}/page{page_num+1}_image_{image_hash}.png"
+                                
+                                # Get image data
+                                if '/Filter' in obj:
+                                    filter_type = obj['/Filter']
+                                    
+                                    # Handle different filter types
+                                    if isinstance(filter_type, list) and '/DCTDecode' in filter_type or filter_type == '/DCTDecode':
+                                        # JPEG image
+                                        image_data = obj.get_data()
+                                        with open(image_filename.replace('.png', '.jpg'), 'wb') as img_file:
+                                            img_file.write(image_data)
+                                        image_paths.append(image_filename.replace('.png', '.jpg'))
+                                    
+                                    elif isinstance(filter_type, list) and '/FlateDecode' in filter_type or filter_type == '/FlateDecode':
+                                        # PNG or other formats that need conversion
+                                        width = obj['/Width']
+                                        height = obj['/Height']
+                                        color_space = obj['/ColorSpace'] if '/ColorSpace' in obj else '/DeviceRGB'
+                                        bits_per_component = obj['/BitsPerComponent']
+                                        
+                                        # Get image data and convert
+                                        try:
+                                            image_data = obj.get_data()
+                                            
+                                            # Create PIL Image from data
+                                            if color_space == '/DeviceRGB':
+                                                mode = "RGB"
+                                            elif color_space == '/DeviceGray':
+                                                mode = "L"
+                                            else:
+                                                mode = "RGB"  # Fallback
+                                            
+                                            # Convert the raw image data
+                                            # For some PDFs, this might need specific handling
+                                            try:
+                                                image = Image.frombytes(mode, (width, height), image_data)
+                                                image.save(image_filename)
+                                                image_paths.append(image_filename)
+                                            except Exception as e:
+                                                print(f"Image conversion error: {e}")
+                                        
+                                        except Exception as e:
+                                            print(f"Error processing FlateDecode image: {e}")
+                                
+                                else:
+                                    # Raw image data
+                                    try:
+                                        image_data = obj.get_data()
+                                        with open(image_filename, 'wb') as img_file:
+                                            img_file.write(image_data)
+                                        image_paths.append(image_filename)
+                                    except Exception as e:
+                                        print(f"Error saving raw image data: {e}")
+                                        
+                            except Exception as e:
+                                print(f"Error extracting image from PDF: {e}")
+            
+            return image_paths
+            
+    except Exception as e:
+        print(f"Error extracting images from PDF: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def extract_pdf_with_layout(pdf_path, output_path=None, pages='all', extract_images=True):
     """
     Extract PDF content preserving layout information by directly processing
     PDF layout elements and converting them to appropriate markdown.
@@ -446,6 +560,7 @@ def extract_pdf_with_layout(pdf_path, output_path=None, pages='all'):
         pdf_path (str): Path to the PDF file
         output_path (str, optional): Path to save the extracted content as markdown
         pages (str or list): Page numbers to extract from (default: 'all')
+        extract_images (bool): Whether to extract and save images (default: True)
         
     Returns:
         str: Markdown formatted content with layout preserved
@@ -477,8 +592,22 @@ def extract_pdf_with_layout(pdf_path, output_path=None, pages='all'):
             detect_vertical=True
         )
         
+        # Extract images if requested
+        image_paths = []
+        image_dir = "extracted_images"
+        if extract_images:
+            print("Extracting images from PDF...")
+            image_paths = extract_images_from_pdf(pdf_path, output_dir=image_dir)
+            print(f"Extracted {len(image_paths)} images to {image_dir}/")
+
         # Initialize markdown output
         markdown_content = "# PDF Content\n\n"
+        
+        # Add image references to markdown if images were extracted
+        if image_paths:
+            markdown_content += "## Extracted Images\n\n"
+            for i, image_path in enumerate(image_paths):
+                markdown_content += f"![Image {i+1}]({image_path})\n\n"
         
         # Process pages with extract_pages
         page_layouts = list(extract_pages(pdf_path, laparams=la_params))
@@ -657,6 +786,38 @@ def process_layout_element(element, text_by_y):
         # Process contained elements recursively
         for child in element:
             process_layout_element(child, text_by_y)
+            
+    elif isinstance(element, LTImage):
+        # Process image element
+        if hasattr(element, 'stream'):
+            image_data = element.stream.get_data()
+            if image_data:
+                try:
+                    # Create directory for images if it doesn't exist
+                    image_dir = "extracted_images"
+                    os.makedirs(image_dir, exist_ok=True)
+                    
+                    # Generate unique filename based on image hash
+                    image_hash = hash(image_data) & 0xffffffff
+                    image_filename = f"{image_dir}/image_{image_hash}.png"
+                    
+                    # Save the image
+                    with open(image_filename, 'wb') as f:
+                        f.write(image_data)
+                    
+                    # Get y-position for positioning in markdown content
+                    y_pos = round(element.y0)
+                    
+                    # Initialize list for this y-position if it doesn't exist
+                    if y_pos not in text_by_y:
+                        text_by_y[y_pos] = []
+                    
+                    # Add image markdown reference to the text elements
+                    image_md = f"![Image]({image_filename})"
+                    text_by_y[y_pos].append((element.x0, image_md, 0, False))
+                    
+                except Exception as e:
+                    print(f"Error processing image: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description='Extract content from PDF files')
@@ -667,6 +828,12 @@ def main():
     parser.add_argument('--markdown', action='store_true', help='Extract entire PDF as markdown with integrated tables')
     parser.add_argument('--layout', action='store_true', help='Extract PDF preserving layout information')
     parser.add_argument('--pages', default='all', help='Page numbers to extract from (e.g., "1,3,5-7" or "all")')
+    parser.add_argument('--images', action='store_true', help='Extract images from PDF and include in markdown')
+    parser.add_argument('--no-images', action='store_false', dest='images', help='Do not extract images from PDF')
+    parser.add_argument('--image-dir', default='extracted_images', help='Directory to save extracted images')
+    
+    # Set default for image extraction
+    parser.set_defaults(images=True)
     
     args = parser.parse_args()
     
@@ -674,19 +841,29 @@ def main():
     if not args.tables and not args.markdown and not args.text and not args.layout:
         args.markdown = True
     
+    # Handle image-only extraction
+    if args.images and not args.tables and not args.markdown and not args.text and not args.layout:
+        image_paths = extract_images_from_pdf(args.pdf_path, args.image_dir)
+        print(f"Extracted {len(image_paths)} images to {args.image_dir}/")
+        if len(image_paths) > 0:
+            print("Extracted images:")
+            for path in image_paths:
+                print(f"  - {path}")
+        return
+    
     if args.layout:
         if args.output:
-            extract_pdf_with_layout(args.pdf_path, args.output, args.pages)
+            extract_pdf_with_layout(args.pdf_path, args.output, args.pages, extract_images=args.images)
         else:
-            markdown = extract_pdf_with_layout(args.pdf_path, pages=args.pages)
+            markdown = extract_pdf_with_layout(args.pdf_path, pages=args.pages, extract_images=args.images)
             print("\nExtracted PDF as Markdown with Layout:")
             print("------------------------------------")
             print(markdown)
     elif args.markdown:
         if args.output:
-            extract_pdf_as_markdown(args.pdf_path, args.output, args.pages)
+            extract_pdf_as_markdown(args.pdf_path, args.output, args.pages, extract_images=args.images, image_dir=args.image_dir)
         else:
-            markdown = extract_pdf_as_markdown(args.pdf_path, pages=args.pages)
+            markdown = extract_pdf_as_markdown(args.pdf_path, pages=args.pages, extract_images=args.images, image_dir=args.image_dir)
             print("\nExtracted PDF as Markdown:")
             print("-------------------------")
             print(markdown)
