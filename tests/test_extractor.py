@@ -2,7 +2,9 @@ import os
 import sys
 import unittest
 import tempfile
+import shutil
 from pathlib import Path
+from PIL import Image
 
 # Add src directory to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -12,6 +14,7 @@ from src.extractor import (
     extract_tables_as_markdown,
     extract_pdf_as_markdown,
     extract_pdf_with_layout,
+    extract_images_from_pdf,
     clean_dataframe
 )
 
@@ -159,6 +162,59 @@ class TestExtractor(unittest.TestCase):
                 markdown = extract_pdf_as_markdown(self.test_pdf, pages="1-2")
                 self.assertIsNotNone(markdown)
                 self.assertIsInstance(markdown, str)
+    
+    def test_extract_images_from_pdf(self):
+        """Test extracting images from PDF."""
+        if not self.test_pdfs:
+            self.skipTest("No test PDFs available")
+        
+        # Create a temp directory for extracted images
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Test image extraction
+            image_paths = extract_images_from_pdf(self.test_pdf, output_dir=temp_dir)
+            
+            # Images might not exist in all PDFs, so we cannot assert the length > 0
+            self.assertIsInstance(image_paths, list)
+            
+            # Check if images were saved to the directory if any were found
+            if image_paths:
+                self.assertTrue(os.path.exists(temp_dir))
+                self.assertTrue(os.path.exists(image_paths[0]))
+                
+                # Check if image files are not empty
+                for image_path in image_paths:
+                    self.assertTrue(os.path.getsize(image_path) > 0)
+    
+    def test_pdf_to_markdown_with_images(self):
+        """Test extracting PDF as markdown with images."""
+        if not self.test_pdfs:
+            self.skipTest("No test PDFs available")
+        
+        # Create a temp directory for extracted images
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Test with image extraction enabled
+            markdown = extract_pdf_as_markdown(self.test_pdf, extract_images=True, image_dir=temp_dir)
+            self.assertIsNotNone(markdown)
+            self.assertIsInstance(markdown, str)
+            self.assertTrue(len(markdown) > 0)
+            
+            # Test with image extraction disabled
+            markdown_no_images = extract_pdf_as_markdown(self.test_pdf, extract_images=False)
+            self.assertIsNotNone(markdown_no_images)
+            self.assertIsInstance(markdown_no_images, str)
+            self.assertTrue(len(markdown_no_images) > 0)
+            
+            # Test layout extraction with images
+            markdown_layout = extract_pdf_with_layout(self.test_pdf, extract_images=True)
+            self.assertIsNotNone(markdown_layout)
+            self.assertIsInstance(markdown_layout, str)
+            self.assertTrue(len(markdown_layout) > 0)
+            
+            # Test layout extraction without images
+            markdown_layout_no_images = extract_pdf_with_layout(self.test_pdf, extract_images=False)
+            self.assertIsNotNone(markdown_layout_no_images)
+            self.assertIsInstance(markdown_layout_no_images, str)
+            self.assertTrue(len(markdown_layout_no_images) > 0)
 
 if __name__ == '__main__':
     unittest.main()
