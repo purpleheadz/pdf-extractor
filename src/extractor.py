@@ -4,7 +4,6 @@ import argparse
 import os
 import re
 import traceback
-from io import StringIO
 
 import PyPDF2
 import pandas as pd
@@ -154,8 +153,6 @@ def extract_tables_as_markdown(pdf_path, output_path=None, pages="all"):
         return markdown_output
     except Exception as e:
         print(f"Error extracting tables from PDF: {e}")
-        import traceback
-
         traceback.print_exc()
         return None
 
@@ -383,8 +380,6 @@ def extract_pdf_as_markdown(
         return markdown_output
     except Exception as e:
         print(f"Error extracting PDF as markdown: {e}")
-        import traceback
-
         traceback.print_exc()
         return None
 
@@ -536,15 +531,15 @@ def extract_images_from_pdf(pdf_path, output_dir="extracted_images"):
                                     image_hash = hash(obj_name) & 0xFFFFFFFF
                                     image_filename = f"{output_dir}/page{page_num+1}_image_{image_hash}.png"
 
-                                    # Get image data
+                                    # Define filter_type first to avoid possible use before assignment
+                                    filter_type = None
                                     if "/Filter" in obj:
                                         filter_type = obj["/Filter"]
-
                                     # Handle different filter types
                                     if (
-                                        isinstance(filter_type, list)
-                                        and "/DCTDecode" in filter_type
-                                        or filter_type == "/DCTDecode"
+                                        filter_type
+                                        and ((isinstance(filter_type, list) and "/DCTDecode" in filter_type)
+                                            or filter_type == "/DCTDecode")
                                     ):
                                         # JPEG image
                                         try:
@@ -644,8 +639,6 @@ def extract_images_from_pdf(pdf_path, output_dir="extracted_images"):
 
     except Exception as e:
         print(f"Error extracting images from PDF: {e}")
-        import traceback
-
         traceback.print_exc()
         return []
 
@@ -760,8 +753,8 @@ def extract_pdf_with_layout(
                         formatted_text = f"**{formatted_text}**"
                         is_heading = True
 
-                    # Apply heading based on font size
-                    if font_size > 12:  # Arbitrary threshold for headings
+                    # Apply heading based on font size if font_size is defined
+                    if font_size and font_size > 12:  # Arbitrary threshold for headings
                         is_heading = True
 
                     # Add text with proper spacing
@@ -838,8 +831,6 @@ def extract_pdf_with_layout(
 
     except Exception as e:
         print(f"Error extracting PDF with layout: {e}")
-        import traceback
-
         traceback.print_exc()
         return None
 
@@ -938,6 +929,7 @@ def process_layout_element(element, text_by_y):
 
 
 def main():
+    """Parse command line arguments and execute the appropriate function."""
     parser = argparse.ArgumentParser(description="Extract content from PDF files")
     parser.add_argument("pdf_path", help="Path to the PDF file")
     parser.add_argument("-o", "--output", help="Path to save the extracted content")
