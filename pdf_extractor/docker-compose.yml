@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  pdf-extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/data
+    # コマンドライン引数のデフォルト値。必要に応じて上書き可能
+    command: "--help"
